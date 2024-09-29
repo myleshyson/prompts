@@ -16,9 +16,6 @@ class SharedMemory
 
     protected ?int $memorySize = null;
 
-    /**
-     * @param Task[] $tasks
-     */
     public function __construct(int $size = 1024)
     {
         $this->memorySize = $size + 1024;

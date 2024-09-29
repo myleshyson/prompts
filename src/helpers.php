@@ -257,3 +257,11 @@ if (! function_exists('\Laravel\Prompts\form')) {
         return new FormBuilder;
     }
 }
+
+if (! function_exists('\Laravel\Prompts\tasks')) {
+
+    function tasks(array $tasks = [], ?int $maxConcurrency = null): array
+    {
+        return (new TaskList($maxConcurrency))->run($tasks);
+    }
+}

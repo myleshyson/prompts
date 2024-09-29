@@ -6,7 +6,6 @@ use Laravel\Prompts\Support\Task;
 use Closure;
 use Laravel\Prompts\Support\SharedMemory;
 use Spatie\Fork\Fork;
-use Symfony\Component\VarDumper\VarDumper;
 
 class TaskList extends Prompt
 {
@@ -25,6 +24,8 @@ class TaskList extends Prompt
 
     protected int $interval = 80;
 
+    public function __construct(protected ?int $maxConcurrency = null) {}
+
     public function value(): bool
     {
         return true;
@@ -33,7 +34,7 @@ class TaskList extends Prompt
     /**
      * @param AsyncTask[] $tasks
      */
-    public function run(array $tasks = []): void
+    public function run(array $tasks = []): array
     {
         $this->capturePreviousNewLines();
 
@@ -59,11 +60,18 @@ class TaskList extends Prompt
             if ($this->isChildProcess($this->renderLoopPid)) {
                 $this->renderLoop();
             } else {
-                Fork::new()
-                    ->after(parent: fn(Task $task) => $this->memory->set($task->id(), $task))
-                    ->run(
-                        ...$this->tasks
-                    );
+                $fork = Fork::new();
+
+                if ($this->maxConcurrency !== null) {
+                    $fork->concurrent($this->maxConcurrency);
+                }
+
+                $fork->after(parent: fn(Task $task) => $this->memory->set($task->id(), $task));
+
+                $fork->run(
+                    ...$this->tasks
+                );
+
                 $this->resetTerminal($originalAsync);
             }
         } catch (\Throwable $e) {
@@ -71,6 +79,8 @@ class TaskList extends Prompt
 
             throw $e;
         }
+
+        return [];
     }
 
     protected function setTasks(array $tasks = []): void
