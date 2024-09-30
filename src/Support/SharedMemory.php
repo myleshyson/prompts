@@ -2,141 +2,119 @@
 
 namespace Laravel\Prompts\Support;
 
-use Laravel\Prompts\Exceptions\MemoryLimitExceededException;
-use Shmop;
+use RuntimeException;
 
 class SharedMemory
 {
-    protected Shmop|false|null $sharedMemory = null;
+    protected string $filePath;
 
-    protected ?int $memoryKey = null;
-
-    protected ?int $semaphoreKey = null;
-
-    protected $semaphore;
-
-    public ?int $memorySize = null;
-
-    protected int $memoryLimit = 128000000;
-
-    /**
-     * @param Task[] $tasks
-     */
-    public function __construct(int $initialSize = 16000)
+    public function __construct()
     {
-        $this->memorySize = $initialSize;
+        $this->filePath = tempnam(sys_get_temp_dir(), '_shared_memory');
 
         $this->createStore();
-
-        $this->createLock();
-
-        $this->aquireLock();
-
-        $this->write([]);
-
-        $this->releaseLock();
     }
 
     public function get(int $key): mixed
     {
-        $this->aquireLock();
-
         $data = $this->read();
-
-        $this->releaseLock();
 
         return $data[$key] ?? null;
     }
 
     public function set(int $key, mixed $value): void
     {
-        $this->aquireLock();
+        $fp = $this->openFile('c+');
 
-        $data = $this->read();
+        if (flock($fp, LOCK_EX)) {
+            $data = $this->read();
 
-        $data[$key] = $value;
+            $data[$key] = $value;
 
-        try {
             $this->write($data);
-        } catch (MemoryLimitExceededException $e) {
-            $this->resize();
-            $this->write($data);
+
+            flock($fp, LOCK_UN);
+        } else {
+            throw new RuntimeException("Failed to acquire lock");
         }
 
-        $this->releaseLock();
+        fclose($fp);
     }
 
     public function destroy(): void
     {
-        shmop_delete($this->sharedMemory);
+        if (file_exists($this->filePath)) {
+            unlink($this->filePath);
+        }
     }
 
     protected function createStore(): void
     {
-        $this->memoryKey = ftok(__FILE__, 'm');
-        $this->sharedMemory = shmop_open($this->memoryKey, 'c', 0644, $this->memorySize);
+        $fp = $this->openFile('w');
 
-        if (!$this->sharedMemory) {
-            throw new \Exception("Could not create shared memory.");
-        }
-    }
+        fwrite($fp, serialize([]));
 
-    protected function createLock(): void
-    {
-        $this->semaphoreKey = ftok(__FILE__, 's');
-        $this->semaphore = sem_get($this->semaphoreKey);
+        fclose($fp);
 
-        if ($this->semaphore === false) {
-            throw new \Exception("Could not create semaphore");
-        }
-    }
-
-    protected function resize(): void
-    {
-        $this->destroy();
-
-        $this->memorySize *= 2;
-
-        if ($this->memorySize > $this->memoryLimit) {
-            throw new MemoryLimitExceededException("Exceeded max shared memory limit of {$this->memoryLimit}");
-        }
-
-        $this->createStore();
+        chmod($this->filePath, 0666);
     }
 
     protected function write(array $data): void
     {
-        $serialized = serialize($data);
+        $serializedData = serialize($data);
 
-        $length = strlen($serialized);
+        $fp = $this->openFile('w');
 
-        if ($length > $this->memorySize - 4) {
-            $this->resize();
-            $this->write($data);
-        }
+        fwrite($fp, $serializedData);
 
-        shmop_write($this->sharedMemory, pack('N', $length), 0);
-        shmop_write($this->sharedMemory, $serialized, 4);
+        fclose($fp);
     }
 
     protected function read(): array
     {
-        $length = unpack('N', shmop_read($this->sharedMemory, 0, 4))[1];
+        $fp = $this->openFile('r');
 
-        $data = shmop_read($this->sharedMemory, 4, $length);
+        $content = '';
 
-        return unserialize($data);
-    }
-
-    protected function aquireLock(): void
-    {
-        if (!sem_acquire($this->semaphore)) {
-            throw new \Exception("Failed to aquire semaphore");
+        while (!feof($fp)) {
+            $content .= fread($fp, 8192);
         }
+
+        fclose($fp);
+
+        return $content ? unserialize($content) : [];
     }
 
-    protected function releaseLock(): void
+    protected function openFile(string $mode)
     {
-        sem_release($this->semaphore);
+        $attempts = 0;
+        $maxAttempts = 5;
+        $fp = false;
+
+        while ($attempts < $maxAttempts) {
+            $fp = fopen($this->filePath, $mode);
+
+            if ($fp !== false) {
+                break;
+            }
+
+            $attempts++;
+
+            usleep(10000); // Wait for 10ms before trying again
+        }
+
+        if ($fp === false) {
+            throw new RuntimeException("Failed to open file after $maxAttempts attempts");
+        }
+
+        return $fp;
+    }
+
+    public function __destruct()
+    {
+        // Only destroy the file if it's the parent process
+        if (getmypid() === posix_getpgid(getmypid())) {
+            $this->destroy();
+        }
     }
 }
