@@ -68,9 +68,7 @@ class TaskList extends Prompt
 
                 $fork->after(parent: fn(Task $task) => $this->memory->set($task->id(), $task));
 
-                $fork->run(
-                    ...$this->tasks
-                );
+                $fork->run(...$this->tasks);
 
                 $this->resetTerminal($originalAsync);
             }
@@ -91,11 +89,9 @@ class TaskList extends Prompt
         }
     }
 
-    protected function initializeMemoryBlock($tasks)
+    protected function initializeMemoryBlock(): void
     {
-        $totalTaskByteSize = array_sum(array_map(fn($task) => $task->getByteSize(), $tasks));
-
-        $this->memory = new SharedMemory($totalTaskByteSize);
+        $this->memory = new SharedMemory();
 
         foreach ($this->tasks as $task) {
             $this->memory->set($task->id(), $task);

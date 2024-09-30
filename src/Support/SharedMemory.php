@@ -2,6 +2,7 @@
 
 namespace Laravel\Prompts\Support;
 
+use Laravel\Prompts\Exceptions\MemoryLimitExceededException;
 use Shmop;
 
 class SharedMemory
@@ -14,24 +15,20 @@ class SharedMemory
 
     protected $semaphore;
 
-    protected ?int $memorySize = null;
+    public ?int $memorySize = null;
 
-    public function __construct(int $size = 1024)
+    protected int $memoryLimit = 128000000;
+
+    /**
+     * @param Task[] $tasks
+     */
+    public function __construct(int $initialSize = 16000)
     {
-        $this->memorySize = $size + 1024;
-        $this->semaphoreKey = ftok(__FILE__, 's');
-        $this->semaphore = sem_get($this->semaphoreKey);
+        $this->memorySize = $initialSize;
 
-        if ($this->semaphore === false) {
-            throw new \Exception("Could not create semaphore");
-        }
+        $this->createStore();
 
-        $this->memoryKey = ftok(__FILE__, 'm');
-        $this->sharedMemory = shmop_open($this->memoryKey, 'c', 0644, $this->memorySize);
-
-        if (!$this->sharedMemory) {
-            throw new \Exception("Could not create shared memory.");
-        }
+        $this->createLock();
 
         $this->aquireLock();
 
@@ -59,7 +56,12 @@ class SharedMemory
 
         $data[$key] = $value;
 
-        $this->write($data);
+        try {
+            $this->write($data);
+        } catch (MemoryLimitExceededException $e) {
+            $this->resize();
+            $this->write($data);
+        }
 
         $this->releaseLock();
     }
@@ -69,6 +71,39 @@ class SharedMemory
         shmop_delete($this->sharedMemory);
     }
 
+    protected function createStore(): void
+    {
+        $this->memoryKey = ftok(__FILE__, 'm');
+        $this->sharedMemory = shmop_open($this->memoryKey, 'c', 0644, $this->memorySize);
+
+        if (!$this->sharedMemory) {
+            throw new \Exception("Could not create shared memory.");
+        }
+    }
+
+    protected function createLock(): void
+    {
+        $this->semaphoreKey = ftok(__FILE__, 's');
+        $this->semaphore = sem_get($this->semaphoreKey);
+
+        if ($this->semaphore === false) {
+            throw new \Exception("Could not create semaphore");
+        }
+    }
+
+    protected function resize(): void
+    {
+        $this->destroy();
+
+        $this->memorySize *= 2;
+
+        if ($this->memorySize > $this->memoryLimit) {
+            throw new MemoryLimitExceededException("Exceeded max shared memory limit of {$this->memoryLimit}");
+        }
+
+        $this->createStore();
+    }
+
     protected function write(array $data): void
     {
         $serialized = serialize($data);
@@ -76,7 +111,8 @@ class SharedMemory
         $length = strlen($serialized);
 
         if ($length > $this->memorySize - 4) {
-            throw new \Exception("Data exceeds memory size");
+            $this->resize();
+            $this->write($data);
         }
 
         shmop_write($this->sharedMemory, pack('N', $length), 0);
@@ -89,7 +125,7 @@ class SharedMemory
 
         $data = shmop_read($this->sharedMemory, 4, $length);
 
-        return unserialize($data, ['allowed_classes' => [Task::class, TaskStatus::class]]);
+        return unserialize($data);
     }
 
     protected function aquireLock(): void
