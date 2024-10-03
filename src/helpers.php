@@ -4,6 +4,8 @@ namespace Laravel\Prompts;
 
 use Closure;
 use Illuminate\Support\Collection;
+use Laravel\Prompts\Support\Task;
+use Laravel\Prompts\Support\TaskResult;
 
 if (! function_exists('\Laravel\Prompts\text')) {
     /**
@@ -259,7 +261,12 @@ if (! function_exists('\Laravel\Prompts\form')) {
 }
 
 if (! function_exists('\Laravel\Prompts\tasks')) {
-
+    /**
+     * @param Task[] $tasks
+     * @param int|null $maxConcurrency
+     *
+     * @return TaskResult[]
+     */
     function tasks(array $tasks = [], ?int $maxConcurrency = null): array
     {
         return (new TaskList($maxConcurrency))->run($tasks);

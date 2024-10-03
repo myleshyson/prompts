@@ -59,6 +59,9 @@ class SharedMemory
         chmod($this->filePath, 0666);
     }
 
+    /**
+     * @param mixed[] $data
+     */
     protected function write(array $data): void
     {
         $serializedData = serialize($data);
@@ -70,6 +73,9 @@ class SharedMemory
         fclose($fp);
     }
 
+    /**
+     * @return mixed[] array
+     */
     protected function read(): array
     {
         $fp = $this->openFile('r');
@@ -85,13 +91,14 @@ class SharedMemory
         return $content ? unserialize($content) : [];
     }
 
-    protected function openFile(string $mode)
+    protected function openFile(string $mode): mixed
     {
         $attempts = 0;
         $maxAttempts = 5;
         $fp = false;
 
         while ($attempts < $maxAttempts) {
+            /** @var resource|false $fp **/
             $fp = fopen($this->filePath, $mode);
 
             if ($fp !== false) {
@@ -110,11 +117,11 @@ class SharedMemory
         return $fp;
     }
 
+    /**
+     * @return void
+     */
     public function __destruct()
     {
-        // Only destroy the file if it's the parent process
-        if (getmypid() === posix_getpgid(getmypid())) {
-            $this->destroy();
-        }
+        $this->destroy();
     }
 }

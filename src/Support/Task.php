@@ -101,7 +101,8 @@ class Task
     }
 
     /**
-     * @param array $taskData
+     * @param array<string, string|int|TaskStatus> $taskData
+     *
      * @return void
      */
     public function setValuesFrom(array $taskData): void
@@ -113,6 +114,9 @@ class Task
         }
     }
 
+    /**
+     * @return array<string, string|int|TaskStatus>
+     */
     public function __serialize(): array
     {
         return [
@@ -123,6 +127,9 @@ class Task
         ];
     }
 
+    /**
+     * @param array<string, string|int|TaskStatus> $data
+     */
     public function __unserialize(array $data): void
     {
         $this->setValuesFrom($data);

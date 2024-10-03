@@ -165,21 +165,27 @@ class TaskList extends Prompt
 
     protected function renderLoop(): void
     {
-        while (true) {
+        while (true) { // @phpstan-ignore-line
             $this->hideCursor();
 
-            foreach ($this->tasks as $task) {
-                $result = $this->memory->get($task->id());
-
-                if ($result) {
-                    $this->tasks[$result->task->id()] = $result->task;
-                }
-            }
+            $this->retrieveUpdatedTasks();
 
             $this->render();
+
             $this->count++;
 
             usleep($this->interval * 1000);
+        }
+    }
+
+    protected function retrieveUpdatedTasks(): void
+    {
+        foreach ($this->tasks as $task) {
+            $result = $this->memory->get($task->id());
+
+            if ($result) {
+                $this->tasks[$result->task->id()] = $result->task;
+            }
         }
     }
 

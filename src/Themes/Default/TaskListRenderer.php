@@ -8,18 +8,17 @@ use Laravel\Prompts\Themes\Default\Renderer;
 
 class TaskListRenderer extends Renderer
 {
-    protected array $frames = [
-        "⣾",
-        "⣽",
-        "⣻",
-        "⢿",
-        "⡿",
-        "⣟",
-        "⣯",
-        "⣷"
-    ];
+    /**
+     * The frames of the spinner.
+     *
+     * @var array<string>
+     */
+    protected array $frames = ['⠂', '⠒', '⠐', '⠰', '⠠', '⠤', '⠄', '⠆'];
 
-    protected string $staticFrame = "⣷";
+    /**
+     * The frame to render when the spinner is static.
+     */
+    protected string $staticFrame = '⠶';
 
     public function __invoke(TaskList $manager): string
     {
