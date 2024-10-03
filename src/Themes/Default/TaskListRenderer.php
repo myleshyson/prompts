@@ -44,7 +44,7 @@ class TaskListRenderer extends Renderer
     protected function render(TaskList $manager): self
     {
         foreach ($manager->tasks as $task) {
-            $frame = $manager->static ? '⣷' : $this->frames[$manager->count % count($this->frames)];
+            $frame = $this->frames[$manager->count % count($this->frames)];
 
             $this->line(match ($task->status()) {
                 TaskStatus::SUCCESS => " {$this->green('✔︎')} {$task->label()} {$this->green('done!')}",
