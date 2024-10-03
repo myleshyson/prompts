@@ -35,7 +35,7 @@ class SharedMemory
 
             flock($fp, LOCK_UN);
         } else {
-            throw new RuntimeException("Failed to acquire lock");
+            throw new RuntimeException('Failed to acquire lock');
         }
 
         fclose($fp);
@@ -60,7 +60,7 @@ class SharedMemory
     }
 
     /**
-     * @param mixed[] $data
+     * @param  mixed[]  $data
      */
     protected function write(array $data): void
     {
@@ -82,7 +82,7 @@ class SharedMemory
 
         $content = '';
 
-        while (!feof($fp)) {
+        while (! feof($fp)) {
             $content .= fread($fp, 8192);
         }
 
@@ -98,7 +98,7 @@ class SharedMemory
         $fp = false;
 
         while ($attempts < $maxAttempts) {
-            /** @var resource|false $fp **/
+            /** @var resource|false $fp * */
             $fp = fopen($this->filePath, $mode);
 
             if ($fp !== false) {

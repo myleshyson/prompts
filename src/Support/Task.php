@@ -3,7 +3,6 @@
 namespace Laravel\Prompts\Support;
 
 use Closure;
-use Laravel\Prompts\Support\TaskStatus;
 
 class Task
 {
@@ -37,10 +36,6 @@ class Task
      */
     private Closure $callback;
 
-    /**
-     * @param string $label
-     * @param Closure $callback
-     */
     public function __construct(string $label, Closure $callback)
     {
         $this->label = $label;
@@ -101,9 +96,7 @@ class Task
     }
 
     /**
-     * @param array<string, string|int|TaskStatus> $taskData
-     *
-     * @return void
+     * @param  array<string, string|int|TaskStatus>  $taskData
      */
     public function setValuesFrom(array $taskData): void
     {
@@ -123,12 +116,12 @@ class Task
             'label' => trim($this->label ?? ''),
             'id' => $this->id,
             'status' => $this->status,
-            'errorMessage' => trim($this->errorMessage ?? '')
+            'errorMessage' => trim($this->errorMessage ?? ''),
         ];
     }
 
     /**
-     * @param array<string, string|int|TaskStatus> $data
+     * @param  array<string, string|int|TaskStatus>  $data
      */
     public function __unserialize(array $data): void
     {

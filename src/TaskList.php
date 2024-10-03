@@ -2,8 +2,8 @@
 
 namespace Laravel\Prompts;
 
-use Laravel\Prompts\Support\Task;
 use Laravel\Prompts\Support\SharedMemory;
+use Laravel\Prompts\Support\Task;
 use Laravel\Prompts\Support\TaskResult;
 use Spatie\Fork\Fork;
 
@@ -12,7 +12,7 @@ class TaskList extends Prompt
     /**
      * The tasks we want to run.
      *
-     * @var Task[] $tasks
+     * @var Task[]
      */
     public array $tasks = [];
 
@@ -54,7 +54,7 @@ class TaskList extends Prompt
     ) {}
 
     /**
-     * @inheritdoc
+     * {@inheritdoc}
      */
     public function value(): bool
     {
@@ -62,8 +62,7 @@ class TaskList extends Prompt
     }
 
     /**
-     * @param Task[] $tasks
-     *
+     * @param  Task[]  $tasks
      * @return TaskResult[]
      */
     public function run(array $tasks = []): array
@@ -80,7 +79,7 @@ class TaskList extends Prompt
 
         $originalAsync = pcntl_async_signals(true);
 
-        pcntl_signal(SIGINT, fn() => exit());
+        pcntl_signal(SIGINT, fn () => exit());
 
         try {
             $this->hideCursor();
@@ -98,7 +97,7 @@ class TaskList extends Prompt
                     $fork->concurrent($this->maxConcurrency);
                 }
 
-                $fork->after(parent: fn(TaskResult $result) => $this->memory->set($result->task->id(), $result));
+                $fork->after(parent: fn (TaskResult $result) => $this->memory->set($result->task->id(), $result));
 
                 $fork->run(...$this->tasks);
 
@@ -116,7 +115,7 @@ class TaskList extends Prompt
     }
 
     /**
-     * @param Task[] $tasks
+     * @param  Task[]  $tasks
      */
     protected function setTasks(array $tasks = []): void
     {
@@ -127,7 +126,7 @@ class TaskList extends Prompt
 
     protected function initializeMemoryBlock(): void
     {
-        $this->memory = new SharedMemory();
+        $this->memory = new SharedMemory;
     }
 
     protected function isChildProcess(): bool
@@ -194,7 +193,7 @@ class TaskList extends Prompt
      */
     public function __destruct()
     {
-        if (!$this->isChildProcess()) {
+        if (! $this->isChildProcess()) {
 
             if ($this->renderLoopPid) {
                 posix_kill($this->renderLoopPid, SIGHUP);

@@ -262,9 +262,7 @@ if (! function_exists('\Laravel\Prompts\form')) {
 
 if (! function_exists('\Laravel\Prompts\tasks')) {
     /**
-     * @param Task[] $tasks
-     * @param int|null $maxConcurrency
-     *
+     * @param  Task[]  $tasks
      * @return TaskResult[]
      */
     function tasks(array $tasks = [], ?int $maxConcurrency = null): array

@@ -65,7 +65,7 @@ trait Themes
             Table::class => TableRenderer::class,
             Progress::class => ProgressRenderer::class,
             Clear::class => ClearRenderer::class,
-            TaskList::class => TaskListRenderer::class
+            TaskList::class => TaskListRenderer::class,
         ],
     ];
 
