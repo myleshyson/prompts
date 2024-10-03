@@ -3,36 +3,68 @@
 namespace Laravel\Prompts;
 
 use Laravel\Prompts\Support\Task;
-use Closure;
 use Laravel\Prompts\Support\SharedMemory;
+use Laravel\Prompts\Support\TaskResult;
 use Spatie\Fork\Fork;
 
 class TaskList extends Prompt
 {
     /**
+     * The tasks we want to run.
+     *
      * @var Task[] $tasks
      */
     public array $tasks = [];
 
+    /**
+     * Whether the spinner can only be rendered once.
+     */
+    public bool $static = false;
+
+    /**
+     * The number of times the list as rendered.
+     */
     public int $count = 0;
 
+    /**
+     * The shared space processes use to communicate.
+     */
     public ?SharedMemory $memory = null;
 
+    /**
+     * The process responsible for rendering the list.
+     */
     protected ?int $renderLoopPid = null;
 
-    protected ?int $pid = null;
+    /**
+     * The parent process id.
+     */
+    protected ?int $parentPid = null;
 
+    /**
+     * How long to wait between rendering each frame.
+     */
     protected int $interval = 80;
 
-    public function __construct(protected ?int $maxConcurrency = null) {}
+    public function __construct(
+        /**
+         * The max number of concurrent processes to run at one time.
+         */
+        protected ?int $maxConcurrency = null
+    ) {}
 
+    /**
+     * @inheritdoc
+     */
     public function value(): bool
     {
         return true;
     }
 
     /**
-     * @param AsyncTask[] $tasks
+     * @param Task[] $tasks
+     *
+     * @return TaskResult[]
      */
     public function run(array $tasks = []): array
     {
@@ -40,11 +72,11 @@ class TaskList extends Prompt
 
         $this->setTasks($tasks);
 
-        /*if (! function_exists('pcntl_fork')) {*/
-        /*    return $this->renderStatically($callback);*/
-        /*}*/
+        if (! function_exists('pcntl_fork')) {
+            return $this->renderStatically();
+        }
 
-        $this->initializeMemoryBlock($tasks);
+        $this->initializeMemoryBlock();
 
         $originalAsync = pcntl_async_signals(true);
 
@@ -52,12 +84,12 @@ class TaskList extends Prompt
 
         try {
             $this->hideCursor();
+            $this->render();
 
-            $this->pid = posix_getpid();
-
+            $this->parentPid = posix_getpid();
             $this->renderLoopPid = pcntl_fork();
 
-            if ($this->isChildProcess($this->renderLoopPid)) {
+            if ($this->isChildProcess()) {
                 $this->renderLoop();
             } else {
                 $fork = Fork::new();
@@ -66,11 +98,13 @@ class TaskList extends Prompt
                     $fork->concurrent($this->maxConcurrency);
                 }
 
-                $fork->after(parent: fn(Task $task) => $this->memory->set($task->id(), $task));
+                $fork->after(parent: fn(TaskResult $result) => $this->memory->set($result->task->id(), $result));
 
                 $fork->run(...$this->tasks);
 
                 $this->resetTerminal($originalAsync);
+
+                exit();
             }
         } catch (\Throwable $e) {
             $this->resetTerminal($originalAsync);
@@ -81,10 +115,12 @@ class TaskList extends Prompt
         return [];
     }
 
+    /**
+     * @param Task[] $tasks
+     */
     protected function setTasks(array $tasks = []): void
     {
         foreach ($tasks as $task) {
-            $task->setId(spl_object_id($task));
             $this->tasks[$task->id()] = $task;
         }
     }
@@ -92,32 +128,30 @@ class TaskList extends Prompt
     protected function initializeMemoryBlock(): void
     {
         $this->memory = new SharedMemory();
+    }
+
+    protected function isChildProcess(): bool
+    {
+        return posix_getpid() !== $this->parentPid;
+    }
+
+    /**
+     * @return TaskResult[]
+     */
+    protected function renderStatically(): array
+    {
+        $this->static = true;
+
+        $results = [];
+
+        $this->hideCursor();
+        $this->render();
 
         foreach ($this->tasks as $task) {
-            $this->memory->set($task->id(), $task);
+            $results[] = $task->run();
         }
-    }
 
-    protected function isChildProcess(?int $id): bool
-    {
-        return $id === 0;
-    }
-
-    protected function renderStatically(Closure $callback): mixed
-    {
-        return true;
-        //$this->static = true;
-        //
-        //try {
-        //    $this->hideCursor();
-        //    $this->render();
-        //
-        //    $result = $callback();
-        //} finally {
-        //    $this->eraseRenderedLines();
-        //}
-        //
-        //return $result;
+        return $results;
     }
 
     protected function resetTerminal(bool $originalAsync): void
@@ -129,16 +163,17 @@ class TaskList extends Prompt
         pcntl_signal(SIGINT, SIG_DFL);
     }
 
-    /**
-     * @param AsyncTask[] $tasks
-     */
     protected function renderLoop(): void
     {
         while (true) {
+            $this->hideCursor();
 
             foreach ($this->tasks as $task) {
-                $task = $this->memory->get($task->id());
-                $this->tasks[$task->id()] = $task;
+                $result = $this->memory->get($task->id());
+
+                if ($result) {
+                    $this->tasks[$result->task->id()] = $result->task;
+                }
             }
 
             $this->render();
@@ -153,15 +188,15 @@ class TaskList extends Prompt
      */
     public function __destruct()
     {
-        if ($this->pid === posix_getpid()) {
+        if (!$this->isChildProcess()) {
 
             if ($this->renderLoopPid) {
                 posix_kill($this->renderLoopPid, SIGHUP);
             }
 
             $this->memory->destroy();
-        }
 
-        parent::__destruct();
+            parent::__destruct();
+        }
     }
 }

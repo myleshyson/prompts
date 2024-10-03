@@ -7,27 +7,53 @@ use Laravel\Prompts\Support\TaskStatus;
 
 class Task
 {
+    /**
+     * The current status of the task.
+     */
     private TaskStatus $status = TaskStatus::IDLE;
 
+    /**
+     * The task output, if there is any.
+     */
+    private ?string $output = null;
+
+    /**
+     * The error message, if there is one.
+     */
     private ?string $errorMessage = null;
 
+    /**
+     * The spl_object_id of this instance.
+     */
     private ?int $id = null;
+
+    /**
+     * The label that will display in the terminal.
+     */
+    private string $label;
+
+    /**
+     * The callback to fire when this task runs.
+     */
+    private Closure $callback;
 
     /**
      * @param string $label
      * @param Closure $callback
      */
-    public function __construct(
-        private string $label,
-        private Closure $callback,
-    ) {}
+    public function __construct(string $label, Closure $callback)
+    {
+        $this->label = $label;
+        $this->callback = $callback;
+        $this->id = spl_object_id($this);
+    }
 
-    public function __invoke(): static
+    public function __invoke(): TaskResult
     {
         return $this->run();
     }
 
-    public function run(): static
+    public function run(): TaskResult
     {
         $this->status = TaskStatus::RUNNING;
 
@@ -46,26 +72,12 @@ class Task
             $this->status = TaskStatus::FAILED;
         }
 
-        return $this;
-    }
-
-    public function getByteSize(): int
-    {
-        $memoryBefore = memory_get_usage();
-        $instance = serialize(new self($this->label, $this->callback));
-        $memoryAfter = memory_get_usage();
-
-        return $memoryAfter - $memoryBefore;
+        return TaskResult::from($this);
     }
 
     public function id(): ?int
     {
         return $this->id;
-    }
-
-    public function setId(int $id): void
-    {
-        $this->id = $id;
     }
 
     public function label(): string
@@ -77,6 +89,12 @@ class Task
     {
         return $this->status;
     }
+
+    public function output(): ?string
+    {
+        return $this->output;
+    }
+
     public function getError(): ?string
     {
         return $this->errorMessage;

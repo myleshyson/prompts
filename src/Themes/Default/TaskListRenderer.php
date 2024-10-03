@@ -19,26 +19,42 @@ class TaskListRenderer extends Renderer
         "⣷"
     ];
 
+    protected string $staticFrame = "⣷";
+
     public function __invoke(TaskList $manager): string
     {
         if (empty($manager->tasks)) {
             return $this;
         }
 
-        $taskCount = count($manager->tasks);
+        if ($manager->static) {
+            return $this->renderStatically($manager);
+        }
 
-        $this->line($this->underline(" Running {$taskCount} Tasks"));
+        return $this->render($manager);
+    }
 
+    protected function renderStatically(TaskList $manager): self
+    {
         foreach ($manager->tasks as $task) {
-            $frame = $this->frames[$manager->count % count($this->frames)];
+            $this->line(" {$this->cyan($this->staticFrame)} {$task->label()}");
+        }
 
-            $this->output .= match ($task->status()) {
+        return $this;
+    }
+
+    protected function render(TaskList $manager): self
+    {
+        foreach ($manager->tasks as $task) {
+            $frame = $manager->static ? "⣷" : $this->frames[$manager->count % count($this->frames)];
+
+            $this->line(match ($task->status()) {
                 TaskStatus::SUCCESS => " {$this->green('✔︎')} {$task->label()} {$this->green('done!')}",
                 TaskStatus::FAILED => " 💩 {$task->label()}",
                 default => " {$this->cyan($frame)} {$task->label()}"
-            } . PHP_EOL;
+            });
         }
 
-        return $this->output;
+        return $this;
     }
 }
