@@ -4,7 +4,7 @@ namespace Laravel\Prompts\Exceptions;
 
 use RuntimeException;
 
-class TaskFailedException extends RuntimeException
+class ProcessFailedException extends RuntimeException
 {
-    //
+
 }

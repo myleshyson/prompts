@@ -3,18 +3,18 @@
 namespace Laravel\Prompts;
 
 use Laravel\Prompts\Support\SharedMemory;
-use Laravel\Prompts\Support\Task;
-use Laravel\Prompts\Support\TaskResult;
+use Laravel\Prompts\Support\Process;
+use Laravel\Prompts\Support\ProcessResult;
 use Spatie\Fork\Fork;
 
-class TaskList extends Prompt
+class Pipeline extends Prompt
 {
     /**
-     * The tasks we want to run.
+     * The processes we want to run.
      *
-     * @var Task[]
+     * @var Process[]
      */
-    public array $tasks = [];
+    public array $processes = [];
 
     /**
      * Whether the spinner can only be rendered once.
@@ -39,19 +39,23 @@ class TaskList extends Prompt
     /**
      * The parent process id.
      */
-    protected ?int $parentPid = null;
+    protected int|false $parentPid = false;
 
     /**
      * How long to wait between rendering each frame.
      */
     protected int $interval = 80;
 
-    public function __construct(
-        /**
-         * The max number of concurrent processes to run at one time.
-         */
-        protected ?int $maxConcurrency = null
-    ) {}
+    /**
+     * The max number of concurrent processes to run at one time.
+     */
+    protected ?int $maxConcurrency = null;
+
+    public function __construct(?int $maxConcurrency)
+    {
+        $this->maxConcurrency = $maxConcurrency;
+        $this->parentPid = getmypid();
+    }
 
     /**
      * {@inheritdoc}
@@ -62,14 +66,15 @@ class TaskList extends Prompt
     }
 
     /**
-     * @param  Task[]  $tasks
-     * @return TaskResult[]
+     * @param Process[] $processes
+     *
+     * @return ProcessResult[]
      */
-    public function run(array $tasks = []): array
+    public function run(array $processes = []): array
     {
         $this->capturePreviousNewLines();
 
-        $this->setTasks($tasks);
+        $this->setProcesses($processes);
 
         if (! function_exists('pcntl_fork')) {
             return $this->renderStatically();
@@ -79,13 +84,12 @@ class TaskList extends Prompt
 
         $originalAsync = pcntl_async_signals(true);
 
-        pcntl_signal(SIGINT, fn () => exit());
+        pcntl_signal(SIGINT, fn() => exit());
 
         try {
             $this->hideCursor();
             $this->render();
 
-            $this->parentPid = posix_getpid();
             $this->renderLoopPid = pcntl_fork();
 
             if ($this->isChildProcess()) {
@@ -97,30 +101,32 @@ class TaskList extends Prompt
                     $fork->concurrent($this->maxConcurrency);
                 }
 
-                $fork->after(parent: fn (TaskResult $result) => $this->memory->set($result->task->id(), $result));
+                $fork->after(parent: fn(ProcessResult $result) => $this->memory->set($result->process->getId(), $result));
 
-                $fork->run(...$this->tasks);
+                $results = $fork->run(...$this->processes);
 
                 $this->resetTerminal($originalAsync);
 
-                exit();
+                if ($this->isChildProcess()) {
+                    exit();
+                }
+
+                return $results;
             }
         } catch (\Throwable $e) {
             $this->resetTerminal($originalAsync);
 
             throw $e;
         }
-
-        return [];
     }
 
     /**
-     * @param  Task[]  $tasks
+     * @param  Process[]  $processes
      */
-    protected function setTasks(array $tasks = []): void
+    protected function setProcesses(array $processes = []): void
     {
-        foreach ($tasks as $task) {
-            $this->tasks[$task->id()] = $task;
+        foreach ($processes as $process) {
+            $this->processes[$process->getId()] = $process;
         }
     }
 
@@ -131,11 +137,11 @@ class TaskList extends Prompt
 
     protected function isChildProcess(): bool
     {
-        return posix_getpid() !== $this->parentPid;
+        return getmypid() !== $this->parentPid;
     }
 
     /**
-     * @return TaskResult[]
+     * @return ProcessResult[]
      */
     protected function renderStatically(): array
     {
@@ -146,8 +152,8 @@ class TaskList extends Prompt
         $this->hideCursor();
         $this->render();
 
-        foreach ($this->tasks as $task) {
-            $results[] = $task->run();
+        foreach ($this->processes as $process) {
+            $results[] = $process->run();
         }
 
         return $results;
@@ -167,7 +173,7 @@ class TaskList extends Prompt
         while (true) { // @phpstan-ignore-line
             $this->hideCursor();
 
-            $this->retrieveUpdatedTasks();
+            $this->retrieveUpdatedProcesses();
 
             $this->render();
 
@@ -177,13 +183,13 @@ class TaskList extends Prompt
         }
     }
 
-    protected function retrieveUpdatedTasks(): void
+    protected function retrieveUpdatedProcesses(): void
     {
-        foreach ($this->tasks as $task) {
-            $result = $this->memory->get($task->id());
+        foreach ($this->processes as $process) {
+            $result = $this->memory->get($process->getId());
 
             if ($result) {
-                $this->tasks[$result->task->id()] = $result->task;
+                $this->processes[$result->process->getId()] = $result->process;
             }
         }
     }

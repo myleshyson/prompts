@@ -4,8 +4,8 @@ namespace Laravel\Prompts;
 
 use Closure;
 use Illuminate\Support\Collection;
-use Laravel\Prompts\Support\Task;
-use Laravel\Prompts\Support\TaskResult;
+use Laravel\Prompts\Support\Process;
+use Laravel\Prompts\Support\ProcessResult;
 
 if (! function_exists('\Laravel\Prompts\text')) {
     /**
@@ -260,13 +260,25 @@ if (! function_exists('\Laravel\Prompts\form')) {
     }
 }
 
-if (! function_exists('\Laravel\Prompts\tasks')) {
+if (! function_exists('\Laravel\Prompts\pipeline')) {
     /**
-     * @param  Task[]  $tasks
-     * @return TaskResult[]
+     * @param Process[] $processes
+     *
+     * @return ProcessResult[]
      */
-    function tasks(array $tasks = [], ?int $maxConcurrency = null): array
+    function pipeline(array $processes = [], ?int $maxConcurrency = null): array
     {
-        return (new TaskList($maxConcurrency))->run($tasks);
+        return (new Pipeline($maxConcurrency))->run($processes);
+    }
+}
+
+if (! function_exists('\Laravel\Prompts\process')) {
+    /**
+     * @param string|string[]|Closure $work
+     * @param-closure-this Process $work
+     */
+    function process(string|array|Closure $work): Process
+    {
+        return new Process($work);
     }
 }

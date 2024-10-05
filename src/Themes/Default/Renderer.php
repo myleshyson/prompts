@@ -45,6 +45,14 @@ abstract class Renderer
     }
 
     /**
+     * Render a success message.
+     */
+    protected function success(string $message): self
+    {
+        return $this->line($this->green("  ✔︎ {$message}"));
+    }
+
+    /**
      * Render a warning message.
      */
     protected function warning(string $message): self

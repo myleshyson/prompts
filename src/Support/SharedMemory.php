@@ -8,10 +8,12 @@ class SharedMemory
 {
     protected string $filePath;
 
+    protected int|false $pid = false;
+
     public function __construct()
     {
         $this->filePath = tempnam(sys_get_temp_dir(), '_shared_memory');
-
+        $this->pid = getmypid();
         $this->createStore();
     }
 
@@ -122,6 +124,8 @@ class SharedMemory
      */
     public function __destruct()
     {
-        $this->destroy();
+        if ($this->pid === getmypid()) {
+            $this->destroy();
+        }
     }
 }

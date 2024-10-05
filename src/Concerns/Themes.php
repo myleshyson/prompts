@@ -16,7 +16,7 @@ use Laravel\Prompts\SelectPrompt;
 use Laravel\Prompts\Spinner;
 use Laravel\Prompts\SuggestPrompt;
 use Laravel\Prompts\Table;
-use Laravel\Prompts\TaskList;
+use Laravel\Prompts\Pipeline;
 use Laravel\Prompts\TextareaPrompt;
 use Laravel\Prompts\TextPrompt;
 use Laravel\Prompts\Themes\Default\ClearRenderer;
@@ -32,7 +32,7 @@ use Laravel\Prompts\Themes\Default\SelectPromptRenderer;
 use Laravel\Prompts\Themes\Default\SpinnerRenderer;
 use Laravel\Prompts\Themes\Default\SuggestPromptRenderer;
 use Laravel\Prompts\Themes\Default\TableRenderer;
-use Laravel\Prompts\Themes\Default\TaskListRenderer;
+use Laravel\Prompts\Themes\Default\PipelineRenderer;
 use Laravel\Prompts\Themes\Default\TextareaPromptRenderer;
 use Laravel\Prompts\Themes\Default\TextPromptRenderer;
 
@@ -65,7 +65,7 @@ trait Themes
             Table::class => TableRenderer::class,
             Progress::class => ProgressRenderer::class,
             Clear::class => ClearRenderer::class,
-            TaskList::class => TaskListRenderer::class,
+            Pipeline::class => PipelineRenderer::class,
         ],
     ];
 
