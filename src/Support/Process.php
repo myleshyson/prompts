@@ -18,19 +18,18 @@ class Process
     private ?string $output = null;
 
     /**
-     * The success message, if there is one.
+     * Error messages.
+     *
+     * @var array<int, string>
      */
-    private ?string $successMessage = null;
-
-    /**
-     * The error message, if there is one.
-     */
-    private ?string $errorMessage = null;
+    private array $errorBag = [];
 
     /**
      * The warning message, if there is one.
+     *
+     * @var array<int, string>
      */
-    private ?string $warningMessage = null;
+    private array $warningBag = [];
 
     /**
      * The spl_object_id of this instance.
@@ -47,12 +46,13 @@ class Process
      * a command line command as a string, or a command line command
      * as an array of arguments.
      *
-     * @var Closure|string|string[]
+     * @var Closure|string|array<int, string>
      */
     private Closure|string|array $work;
 
     /**
-     * @param Closure|string|string[] $work
+     * @param  Closure|string| array<int, string>  $work
+     *
      * @param-closure-this static $work
      */
     public function __construct(Closure|string|array $work)
@@ -68,13 +68,13 @@ class Process
 
     public function run(): ProcessResult
     {
-        $this->status = ProcessStatus::RUNNING;
+        $this->setStatus(ProcessStatus::RUNNING);
 
         try {
             $this->processResult($this->resolveWorkCallback());
         } catch (\Throwable $error) {
-            $this->errorMessage = $error->getMessage();
-            $this->status = ProcessStatus::FAILED;
+            $this->addError($error->getMessage());
+            $this->setStatus(ProcessStatus::FAILED);
         }
 
         return ProcessResult::from($this);
@@ -87,22 +87,29 @@ class Process
         return $this;
     }
 
-    public function warn(?string $message = null): void
+    public function addWarning(string $message): void
     {
-        $this->status = ProcessStatus::WARNING;
-        $this->warningMessage = $message;
+        $this->warningBag[] = $message;
     }
 
-    public function fail(?string $message = null): void
+    public function addError(string $message): void
     {
-        $this->status = ProcessStatus::FAILED;
-        $this->errorMessage = $message;
+        $this->errorBag[] = $message;
     }
 
-    public function succeed(?string $message = null): void
+    public function fail(): void
     {
-        $this->status = ProcessStatus::SUCCESS;
-        $this->successMessage = $message;
+        $this->setStatus(ProcessStatus::FAILED);
+    }
+
+    public function warn(): void
+    {
+        $this->setStatus(ProcessStatus::WARNING);
+    }
+
+    public function succeed(): void
+    {
+        $this->setStatus(ProcessStatus::SUCCESS);
     }
 
     public function getId(): ?int
@@ -120,6 +127,11 @@ class Process
         return $this->status;
     }
 
+    public function setStatus(ProcessStatus $status): void
+    {
+        $this->status = $status;
+    }
+
     public function setOutput(?string $output = null): void
     {
         $this->output = $output;
@@ -127,26 +139,27 @@ class Process
 
     public function getOutput(): ?string
     {
-        return trim($this->output);
-    }
-
-    public function getErrorMessage(): ?string
-    {
-        return trim($this->errorMessage);
-    }
-
-    public function getWarningMessage(): ?string
-    {
-       return trim($this->warningMessage);
-    }
-
-    public function getSuccessMessage(): ?string
-    {
-       return trim($this->successMessage);
+        return $this->output;
     }
 
     /**
-     * @param  array<string, string|int|ProcessStatus>  $processData
+     * @return array<int, string>
+     */
+    public function getErrorBag(): array
+    {
+        return $this->errorBag;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getWarningBag(): array
+    {
+        return $this->warningBag;
+    }
+
+    /**
+     * @param  array<string, string| array<int, string>|int|ProcessStatus>  $processData
      */
     public function setValuesFrom(array $processData): void
     {
@@ -160,11 +173,11 @@ class Process
     protected function resolveWorkCallback(): Closure
     {
         if (is_string($this->work)) {
-            return Closure::bind(fn() => $this->runCommandLineProcess(CommandLineProcess::fromShellCommandline($this->work)), $this, $this);
+            return Closure::bind(fn () => $this->runCommandLineProcess(CommandLineProcess::fromShellCommandline($this->work)), $this, $this);
         }
 
         if (is_array($this->work)) {
-            return Closure::bind(fn() => $this->runCommandLineProcess((new CommandLineProcess($this->work))), $this, $this);
+            return Closure::bind(fn () => $this->runCommandLineProcess((new CommandLineProcess($this->work))), $this, $this);
         }
 
         return Closure::bind($this->work, $this, $this);
@@ -174,10 +187,15 @@ class Process
     {
         $process->run();
 
-        $this->output = $process->getOutput();
-        $this->errorMessage = $process->getErrorOutput();
+        $this->setOutput($process->getOutput());
 
-        return $process->isSuccessful();
+        if (! $process->isSuccessful()) {
+            $this->addError($process->getErrorOutput());
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -191,16 +209,23 @@ class Process
             return;
         }
 
-        if ($result === false) {
-            $this->status = ProcessStatus::FAILED;
+        if ($result === false || ! empty($this->getErrorBag())) {
+            $this->setStatus(ProcessStatus::FAILED);
+
             return;
         }
 
-        $this->status = ProcessStatus::SUCCESS;
+        if (! empty($this->getWarningBag())) {
+            $this->setStatus(ProcessStatus::WARNING);
+
+            return;
+        }
+
+        $this->setStatus(ProcessStatus::SUCCESS);
     }
 
     /**
-     * @return array<string, string|int|ProcessStatus>
+     * @return array<string, string|int| array<int, string>|ProcessStatus>
      */
     public function __serialize(): array
     {
@@ -209,14 +234,13 @@ class Process
             'id' => $this->id,
             'status' => $this->status,
             'output' => $this->getOutput(),
-            'warningMessage' => $this->getWarningMessage(),
-            'successMessage' => $this->getSuccessMessage(),
-            'errorMessage' => $this->getSuccessMessage(),
+            'warningBag' => $this->getWarningBag(),
+            'errorBag' => $this->getErrorBag(),
         ];
     }
 
     /**
-     * @param  array<string, string|int|ProcessStatus>  $data
+     * @param  array<string,  array<int, string>|string|int|ProcessStatus>  $data
      */
     public function __unserialize(array $data): void
     {

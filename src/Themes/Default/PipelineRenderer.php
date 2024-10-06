@@ -2,8 +2,8 @@
 
 namespace Laravel\Prompts\Themes\Default;
 
-use Laravel\Prompts\Support\ProcessStatus;
 use Laravel\Prompts\Pipeline;
+use Laravel\Prompts\Support\ProcessStatus;
 
 class PipelineRenderer extends Renderer
 {
@@ -12,20 +12,22 @@ class PipelineRenderer extends Renderer
      *
      * @var array<string>
      */
-    protected array $frames = ['⠂', '⠒', '⠐', '⠰', '⠠', '⠤', '⠄', '⠆'];
+    public static array $frames = ['⠂', '⠒', '⠐', '⠰', '⠠', '⠤', '⠄', '⠆'];
 
     /**
      * The frame to render when the spinner is static.
      */
-    protected string $staticFrame = '⠶';
+    public static string $staticFrame = '⠶';
 
     /**
-     * The interval between frames.
+     * How long to wait between rendering each frame.
      */
-    protected int $interval = 75;
+    public static int $interval = 75;
 
     public function __invoke(Pipeline $manager): string
     {
+        $manager->interval = self::$interval;
+
         if (empty($manager->processes)) {
             return $this;
         }
@@ -40,7 +42,7 @@ class PipelineRenderer extends Renderer
     protected function renderStatically(Pipeline $manager): self
     {
         foreach ($manager->processes as $process) {
-            $this->line("  {$this->cyan($this->staticFrame)} {$process->getLabel()}");
+            $this->line("  {$this->cyan(self::$staticFrame)} {$process->getLabel()}");
         }
 
         return $this;
@@ -49,7 +51,7 @@ class PipelineRenderer extends Renderer
     protected function render(Pipeline $manager): self
     {
         foreach ($manager->processes as $process) {
-            $frame = $this->frames[$manager->count % count($this->frames)];
+            $frame = self::$frames[$manager->count % count(self::$frames)];
 
             match ($process->getStatus()) {
                 ProcessStatus::SUCCESS => $this->success($process->getLabel()),

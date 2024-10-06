@@ -2,9 +2,9 @@
 
 namespace Laravel\Prompts;
 
-use Laravel\Prompts\Support\SharedMemory;
 use Laravel\Prompts\Support\Process;
 use Laravel\Prompts\Support\ProcessResult;
+use Laravel\Prompts\Support\SharedMemory;
 use Spatie\Fork\Fork;
 
 class Pipeline extends Prompt
@@ -32,6 +32,11 @@ class Pipeline extends Prompt
     public ?SharedMemory $memory = null;
 
     /**
+     * How long to wait between rendering each frame.
+     */
+    public int $interval = 75;
+
+    /**
      * The process responsible for rendering the list.
      */
     protected ?int $renderLoopPid = null;
@@ -40,11 +45,6 @@ class Pipeline extends Prompt
      * The parent process id.
      */
     protected int|false $parentPid = false;
-
-    /**
-     * How long to wait between rendering each frame.
-     */
-    protected int $interval = 80;
 
     /**
      * The max number of concurrent processes to run at one time.
@@ -66,8 +66,7 @@ class Pipeline extends Prompt
     }
 
     /**
-     * @param Process[] $processes
-     *
+     * @param  Process[]  $processes
      * @return ProcessResult[]
      */
     public function run(array $processes = []): array
@@ -84,7 +83,7 @@ class Pipeline extends Prompt
 
         $originalAsync = pcntl_async_signals(true);
 
-        pcntl_signal(SIGINT, fn() => exit());
+        pcntl_signal(SIGINT, fn () => exit());
 
         try {
             $this->hideCursor();
@@ -94,25 +93,25 @@ class Pipeline extends Prompt
 
             if ($this->isChildProcess()) {
                 $this->renderLoop();
-            } else {
-                $fork = Fork::new();
-
-                if ($this->maxConcurrency !== null) {
-                    $fork->concurrent($this->maxConcurrency);
-                }
-
-                $fork->after(parent: fn(ProcessResult $result) => $this->memory->set($result->process->getId(), $result));
-
-                $results = $fork->run(...$this->processes);
-
-                $this->resetTerminal($originalAsync);
-
-                if ($this->isChildProcess()) {
-                    exit();
-                }
-
-                return $results;
             }
+
+            $fork = Fork::new();
+
+            if ($this->maxConcurrency !== null) {
+                $fork->concurrent($this->maxConcurrency);
+            }
+
+            $fork->after(parent: fn (ProcessResult $result) => $this->memory->set($result->process->getId(), $result));
+
+            $results = $fork->run(...$this->processes);
+
+            $this->resetTerminal($originalAsync);
+
+            if ($this->isChildProcess()) {
+                exit();
+            }
+
+            return $results;
         } catch (\Throwable $e) {
             $this->resetTerminal($originalAsync);
 

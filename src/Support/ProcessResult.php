@@ -2,11 +2,15 @@
 
 namespace Laravel\Prompts\Support;
 
-use Illuminate\Contracts\Process\ProcessResult as ProcessResultContract;
+use Laravel\Prompts\Concerns\Colors;
 use Laravel\Prompts\Exceptions\ProcessFailedException;
 
-class ProcessResult implements ProcessResultContract
+use function Laravel\Prompts\table;
+
+class ProcessResult
 {
+    use Colors;
+
     /**
      * The underlying process instance.
      */
@@ -22,14 +26,19 @@ class ProcessResult implements ProcessResultContract
         $this->process = $process;
     }
 
-    public function command(): string
+    public function process(): string
     {
         return $this->process->getLabel();
     }
 
+    public function successfulWithWarnings(): bool
+    {
+        return $this->process->getStatus() === ProcessStatus::WARNING;
+    }
+
     public function successful(): bool
     {
-        return $this->process->getStatus() === ProcessStatus::SUCCESS;
+        return $this->process->getStatus() === ProcessStatus::SUCCESS || $this->successfulWithWarnings();
     }
 
     public function failed(): bool
@@ -56,24 +65,59 @@ class ProcessResult implements ProcessResultContract
         return str_contains($this->output(), $output);
     }
 
-    public function warningOutput(): ?string
+    /**
+     * @return array<int, string>
+     */
+    public function errorBag(): array
     {
-       return $this->process->getWarningMessage();
+        return $this->process->getErrorBag();
     }
 
-    public function seeInWarningOutput(string $output): bool
+    /**
+     * @return array<int, string>
+     */
+    public function warningBag(): array
     {
-       return str_contains($this->warningOutput(), $output);
+        return $this->process->getWarningBag();
     }
 
-    public function errorOutput(): ?string
+    public function errorSummary(): void
     {
-        return $this->process->getErrorMessage();
+        if (empty($this->errorBag())) {
+            return;
+        }
+
+        table(
+            headers: [$this->reset($this->process())],
+            rows: $this->getSummaryRowsForStatus(ProcessStatus::FAILED)
+        );
     }
 
-    public function seeInErrorOutput(string $output): bool
+    public function warningSummary(): void
     {
-        return str_contains($this->errorOutput(), $output);
+        if (empty($this->warningBag())) {
+            return;
+        }
+
+        table(
+            headers: [$this->process()],
+            rows: $this->getSummaryRowsForStatus(ProcessStatus::WARNING)
+        );
+    }
+
+    public function summary(): void
+    {
+        if (empty($this->errorBag()) && empty($this->warningBag())) {
+            return;
+        }
+
+        table(
+            headers: [$this->process()],
+            rows: [
+                ...$this->getSummaryRowsForStatus(ProcessStatus::FAILED),
+                ...$this->getSummaryRowsForStatus(ProcessStatus::WARNING)
+            ]
+        );
     }
 
     public function throw(?callable $callback = null): self
@@ -86,7 +130,7 @@ class ProcessResult implements ProcessResultContract
             $callback();
         }
 
-        throw new ProcessFailedException();
+        throw new ProcessFailedException;
     }
 
     public function throwIf(bool $condition, ?callable $callback = null): self
@@ -97,4 +141,27 @@ class ProcessResult implements ProcessResultContract
 
         return $this;
     }
+
+    /**
+     * @return array<int, array<int, string>>
+     */
+    protected function getSummaryRowsForStatus(ProcessStatus $status): array
+    {
+        $messages = match($status) {
+            ProcessStatus::WARNING => $this->warningBag(),
+            ProcessStatus::FAILED => $this->errorBag(),
+            default => []
+        };
+
+        if (empty($messages)) {
+            return [];
+        }
+
+        return [
+            [$this->bold($status->format($status->heading()))],
+            ...array_map(fn($message) => [$status->format("· {$message}")], $messages)
+        ];
+    }
+
+
 }
